@@ -1,9 +1,9 @@
 # harness-refactor
 
-레거시 코드를 **구조만** 리팩토링하는 Claude Code 하네스.
+레거시 코드를 **구조를** 리팩토링하는 Claude Code 하네스.
 
 파일 하나를 진단하고, 작업 계획을 세우고, 리팩토링한 코드를 만든 뒤 검토까지 한다.
-**원본은 건드리지 않는다** — 결과물은 `_workspace/output/` 에 나오고 적용은 사람이 한다.
+**원본은 건드리지 않는다** — 결과물은 대상 프로젝트의 `_workspace/output/` 에 생성되고 적용은 직접한다.
 
 ## 무엇을 하고 무엇을 안 하나
 
@@ -16,7 +16,7 @@
 추출은 **두 곳 이상 반복되고, 여러 단계가 묶이고, 같은 개념일 때만** 한다.
 한 줄을 감싸는 래퍼는 만들지 않는다 — 이름 읽고 정의로 점프하는 비용이 원문 읽는 비용보다 크다.
 
-## 기계가 보증하는 두 가지
+## 에이전트 리팩토링 근거
 
 나머지는 모델 판단이지만, 이 둘은 세거나 대조해서 확인된다.
 
@@ -36,6 +36,34 @@
 
 암산으로 세면 반드시 빠진다. 실제로 같은 파일에서 9곳 중 6곳만 잡힌 적이 다섯 번 연속 있었다.
 빠진 위치는 그만큼 옮겨지지 않고 코드에 남는다.
+
+## 리팩토링 샘플 결과
+
+**분기와 `return` 이 그대로다.** 갈래를 합치지도 지우지도 않았다는 뜻이다.
+줄어든 것은 중첩과 `else` 뿐이고, 적용된 것은 가드 절 평탄화와 반복 리터럴 상수화다.
+
+```
+✗ 원문                                        ○ 결과
+if user.is_premium:                           if not user.is_premium:
+    if order.amount > 1000:                       if user.is_admin:
+        if not order.has_discount:                    return APPROVED
+            if user.region != "EU":               return REJECTED
+                for item in order.items:
+                    if item.price < 0:        if order.amount <= 1000:
+                        return "rejected"         ...
+                return "approved"
+            else:                             if order.has_discount:
+                ...                               return REJECTED
+        else:
+            return "rejected"                 if user.region == "EU":
+    else:                                         ...
+        ...
+else:                                         for item in order.items:
+    if user.is_admin:                             if item.price < 0:
+        return "approved"                             return REJECTED
+    else:                                     return APPROVED
+        return "rejected"
+```
 
 ## 구성
 
@@ -99,12 +127,3 @@ diff -r app/ _workspace/output/app/
 
 에이전트들은 스택을 모른다. 버전별 문법 표도 프레임워크 관례도 들고 있지 않다.
 언어를 추가할 때 손댈 곳은 스킬의 판정 표와 제외 목록뿐이다.
-
-## 알려진 제약
-
-| 제약 | |
-|---|---|
-| 코드를 실행하지 않는다 | 테스트도 정적 도구도 안 돌린다. 동작 확인은 사람 몫이다 |
-| 호출자를 보지 않는다 | 분석은 대상 파일 안에서 끝난다. 시그니처·가시성이 바뀌는 작업은 범위 밖 |
-| `docs/conventions/` 가 비어 있다 | 프로젝트가 선언한 구조 규칙이 없으면 기계로 대조할 것도 그만큼 줄어든다 |
-| Python / FastAPI 는 설계만 | 실제 실행 미확인 |
